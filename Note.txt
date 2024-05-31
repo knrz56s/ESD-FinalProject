@@ -1,0 +1,7 @@
+Unsolved :
+	UART 與 七段顯示器衝突
+	LED
+	壓住時間
+Solved :
+	LED 搶到 Rx, Tx
+	檔案太大：error C249: ‘DATA‘: SEGMENT TOO LARGE
