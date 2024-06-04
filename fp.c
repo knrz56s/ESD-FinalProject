@@ -22,20 +22,20 @@ unsigned char code WeiMa[]={0xfe,0xfd,0xfb,0xf7,0xef,0xdf,0xbf,0x7f};
 
 unsigned char code alphabet[]={
 								0x77, 0x7C, 0x39, 0x5E, 0x79, 0x71,
-							 	0x7D, 0x76, 0x06, 0x1E, 0x7A, 0x38,
-							 	0x57, 0x37, 0x3F, 0x73, 0x6F, 0x73,
-							 	0x6D, 0x78, 0x3E, 0x3E, 0x35, 0x77,
-							 	0x6E, 0x5B, 0x3F, 0x06, 0x5B, 0x4F,
-							 	0x66, 0x6D, 0x7D, 0x07, 0x7F, 0x6F,
+							 	0x3D, 0x76, 0x0F, 0x0E, 0x75, 0x38,
+							 	0x37, 0x54, 0x5C, 0x73, 0x67, 0x31,
+							 	0x49, 0x78, 0x3E, 0x1C, 0x7E, 0x64,
+							 	0x6E, 0x5A, 0x3F, 0x06, 0x5B, 0x4F,
+							 	0x66, 0x6D, 0x7D, 0x27, 0x7F, 0x6F,
 							  }; // a-z0-9
 
 unsigned char code morse[36][6]={
-    "dD", "Dddd", "DdDd", "Ddd", "d", "ddDd",
-    "DDd", "dddd", "dd", "dDDD", "DdD", "dDdd",
-    "DD", "Dd", "DDD", "dDDd", "DDdD", "dDd",
-    "ddd", "D", "ddD", "dddD", "dDD", "DddD",
-    "DdDD", "DDdd", "dDDDD", "ddDDD", "dddDD", "ddddD",
-    "ddddd", "Ddddd", "DDddd", "DDDdd", "DDDDd", "DDDDD"
+    "dD", "Dddd", "DdDd", "Ddd", "d", "ddDd",				// A, B, C, D, E, F
+    "DDd", "dddd", "dd", "dDDD", "DdD", "dDdd",				// G, H, I, J, K, L
+    "DD", "Dd", "DDD", "dDDd", "DDdD", "dDd",				// M, N, O, P, Q, R
+    "ddd", "D", "ddD", "dddD", "dDD", "DddD",				// S, T, U, V, W, X
+    "DdDD", "DDdd", "dDDDD", "ddDDD", "dddDD", "ddddD",		// Y, Z, 0, 1, 2, 3
+    "ddddd", "Ddddd", "DDddd", "DDDdd", "DDDDd", "DDDDD"	// 4, 5, 6, 7, 8, 9
 };
 
 unsigned char TempData[MAX]; // 顯示在七段顯示器上
@@ -50,7 +50,6 @@ byte get_0d = 0;
 byte rec_flag = 0;
 
 //unsigned char Timer0_H,Timer0_L,Time;
-
 
 
 /*------------------------------------------------
@@ -104,17 +103,25 @@ void main (void){
 			ky = KeyScanEight();
 	
 			if(ky == 8){ // Send UART
-				inputs[input_idx] = '\0';
-				SendStr(inputs);
+
+				// Add terminator and send
+				/*inputs[input_idx] = '\0';
+				SendStr(inputs);*/
 	
 				// Clean Input
 				for(input_idx = 0; input_idx < MAX; input_idx++) inputs[input_idx] = 0;
 				input_idx = 0;
+
+				// Clean Demonstrate characters
+				TempData[0] = TempData[1] = TempData[2] = TempData[3] = 0;
+				TempData[4] = TempData[5] = TempData[6] = TempData[7] = 0;
+
 			}else if(ky == 4){ // Finish a character
 				
+				// Add terminator
 				bfr[bfr_idx] = '\0';
  		    	
-				// Code to Alphabet
+				// Morse code to alphabet
 				for(idx = 0; idx < 36; idx++){
 					if(strcmp(bfr, morse[idx]) == 0){
 						TempData[input_idx] = alphabet[idx];
@@ -130,18 +137,23 @@ void main (void){
 				// Clean morse code buffer
 				for(bfr_idx = 0; bfr_idx < 6; bfr_idx++) bfr[bfr_idx] = 0;
 				bfr_idx = 0;
+
 			}else if(ky >> 1 == 0){ // ky == 0 or 1
+				
 				if(ky == 0){ // Dot
 					bfr[bfr_idx] = 'd';
 				}else if(ky == 1){ // Dash
 					bfr[bfr_idx] = 'D';
 				}
-
+				
+				// Avoid index OutOfBound
 				bfr_idx = (bfr_idx == 5) ? 5 : bfr_idx + 1;
 
 				// Check dot or dash
+				
 				if(bfr[bfr_idx - 1] == 'd') TempData[7] = alphabet[29];
 				else TempData[7] = alphabet[30];
+
 			}
 
 		//}
@@ -249,7 +261,18 @@ void Timer1_isr(void) interrupt 3{ // 掃描按鍵x
 
 	TH1=(65536-2000)/256;		  //重新賦值 2ms
 	TL1=(65536-2000)%256;	
-	
+
+	// 測試壓多久用
+	/*
+	TempData[0] = alphabet[26 + len/1000];
+	TempData[1] = alphabet[26 + (len/100)%10];
+	TempData[2] = alphabet[26 + (len/10)%10];
+	TempData[3] = alphabet[26 + len%10];
+	*/
+/*	TempData[4] = alphabet[26 + ];
+	TempData[5] = alphabet[26 + ];
+	TempData[6] = alphabet[26 + ];
+	TempData[7] = alphabet[26 + ];	*/
 }
 /*------------------------------------------------
  uS延時函數，含有輸入參數 unsigned char t，無返回值
@@ -376,13 +399,13 @@ void Display(unsigned char FirstBit,unsigned char Num){
 ------------------------------------------------*/
 unsigned char KeyScanEight(void){
 	unsigned char keyvalue;
-	unsigned char len = 0;
+	unsigned int len = 0;
 	if(KeyPort!=0xff){
 		DelayMs(10);
 		if(KeyPort!=0xff){
 			keyvalue = KeyPort;
 
-			LED1 = LED2 = LED3 = LED4 = 1;
+			LED1 = LED2 = LED3 = LED4 = 0;
 		    while(KeyPort != 0xff){ // 壓住發出聲音
 				SPK = !SPK;
 				DelayMs(1);
@@ -391,11 +414,11 @@ unsigned char KeyScanEight(void){
 				if(len > 10000)len = 9999;
 
 			}			
-			LED1 = LED2 = LED3 = LED4 = 0;
+			LED1 = LED2 = LED3 = LED4 = 1;
 
 			if(keyvalue == 0x7f) return 8;
 			if(keyvalue == 0xf7) return 4;
-			return len > 800 ? 1 : 0; // 憑感覺
+			return (len > 300) ? 1 : 0; // 測試後感覺較好
 
 
 			/*switch(keyvalue){

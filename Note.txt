@@ -1,7 +1,6 @@
 Unsolved :
 	UART 與 七段顯示器衝突
-	LED
-	壓住時間
 Solved :
-	LED 搶到 Rx, Tx
-	檔案太大：error C249: ‘DATA‘: SEGMENT TOO LARGE
+	LED 搶到 Rx, Tx -> 只顯示最後四個燈
+	檔案太大：error C249: ‘DATA‘: SEGMENT TOO LARGE -> 刪減程式碼和縮小變數型態
+	壓住時間 -> 顯示在七段顯示器上看大概要押多久
