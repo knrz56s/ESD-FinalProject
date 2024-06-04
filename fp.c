@@ -1,5 +1,5 @@
 // 傳輸速率9600	晶振11.0592MHz
-
+// port 插哪個就選哪個
 //包含標頭檔，一般情況不需要改動，標頭檔包含特殊功能寄存器的定義 
 #include <reg52.h> 
 #include <string.h>                       
@@ -45,6 +45,8 @@ typedef unsigned int  word;
 
 byte buf[MAX]; // Receive Buffer
 byte head = 0;
+byte inputs[MAX]; // Input character buffer
+byte input_idx = 0;
 
 byte get_0d = 0;
 byte rec_flag = 0;
@@ -70,21 +72,22 @@ unsigned char KeyScanEight(void);
                     主函數
 ------------------------------------------------*/
 void main (void){
-	//word i;
-	unsigned char k, ky, idx, bfr_idx, input_idx; // indexes
+	unsigned char k, ky, idx, bfr_idx; // indexes
 	unsigned char bfr[6]; // Code Buffer
-	unsigned char inputs[MAX]; // Input character buffer
 
 	// Initialization
-	//InitUART();
+	InitUART();
 	Init_Timer0();
-	Init_Timer1();
+	//Init_Timer1();
 
-	idx = bfr_idx = input_idx = 0;
-	//ES = 1;                  //打開串口中斷
+	SendStr("System launched. -w-\n");
+
+	idx = bfr_idx = 0;
+	ES = 1;                  //打開串口中斷
+
 
 	while (1){
-		/*if (rec_flag == 1){ // 要收到CRLF才會是1
+		if (rec_flag == 1){ // 要收到CRLF才會是1
 			buf[head] = '\0';
 			rec_flag = 0;
 			head = 0;
@@ -98,18 +101,20 @@ void main (void){
 			}
 
 			head = 0; // reset
-		}else{ // 沒收到訊息就可以做其他事：*/
-
+		}else{ // 沒收到訊息就可以做其他事：
+		
 			ky = KeyScanEight();
 	
 			if(ky == 8){ // Send UART
 
 				// Add terminator and send
-				/*inputs[input_idx] = '\0';
-				SendStr(inputs);*/
+				inputs[input_idx] = '\0';
+				SendStr(inputs);
+				SendStr("\r\n");
 	
 				// Clean Input
-				for(input_idx = 0; input_idx < MAX; input_idx++) inputs[input_idx] = 0;
+				for(input_idx = 0; input_idx < MAX; input_idx++)
+					inputs[input_idx] = 0;
 				input_idx = 0;
 
 				// Clean Demonstrate characters
@@ -133,6 +138,7 @@ void main (void){
 					}
 				}
 				input_idx++;
+				if(input_idx >= MAX)input_idx = MAX - 1;
 	
 				// Clean morse code buffer
 				for(bfr_idx = 0; bfr_idx < 6; bfr_idx++) bfr[bfr_idx] = 0;
@@ -155,8 +161,8 @@ void main (void){
 				else TempData[7] = alphabet[30];
 
 			}
-
-		//}
+		
+		}
     }
 }
 
@@ -186,15 +192,15 @@ void UART_SER (void) interrupt 4{ //串列中斷服務程式
    	if(RI){ //判斷是接收中斷產生
 		RI=0;                      //標誌位元清零
 		tmp=SBUF;                 //讀入緩衝區的值
-		if (get_0d == 0){
-			if (tmp == 0x0d) get_0d = 1;
-			else{
+		if (get_0d == 0){ // 還沒收到0x0d
+			if (tmp == 0x0d) get_0d = 1; // 收到了 0x0d
+			else{ // 將資料寫入 buffer
 				buf[head]=tmp;              
 				head++;
 				if (head == MAX) head = 0;	
 			}				     
 		}else if (get_0d == 1){
-			if (tmp != 0x0a){
+			if (tmp != 0x0a){ // 若 0x0d 後不是 0x0a 那資料全部不要
 				head = 0;
 				get_0d = 0;		
 			}else{
@@ -203,7 +209,7 @@ void UART_SER (void) interrupt 4{ //串列中斷服務程式
 			}
 		}
 		//	SBUF=tmp;                 //把接收到的值再發回電腦端
-	 }
+	}
 //   if(TI)                        //如果是發送標誌位元，清零
 //     TI=0;
 }
