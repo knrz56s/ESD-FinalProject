@@ -44,12 +44,13 @@ typedef unsigned char byte;
 typedef unsigned int  word;
 
 byte buf[MAX]; // Receive Buffer
-byte head = 0;
+byte head = 0, rcv_idx = 0;
 byte inputs[MAX]; // Input character buffer
 byte input_idx = 0;
 
 byte get_0d = 0;
 byte rec_flag = 0;
+byte was_rec_flag = 0;
 
 //unsigned char Timer0_H,Timer0_L,Time;
 
@@ -67,7 +68,7 @@ void Display(unsigned char FirstBit,unsigned char Num);
 //unsigned char KeyScanSixteen(void);
 //unsigned char KeyPro(void);
 unsigned char KeyScanEight(void);
-
+void ShowReceivedSymbol(void);
 /*------------------------------------------------
                     ㄧ计
 ------------------------------------------------*/
@@ -91,33 +92,55 @@ void main (void){
 			buf[head] = '\0';
 			rec_flag = 0;
 			head = 0;
+			rcv_idx = 0;
 			
+			// Show a symbol
+			ShowReceivedSymbol();		
+
 			while(buf[head] != '\0'){
-				k = ((buf[head] - '0') - 1) + 7;
-				//Timer0_H = FREQH[k];
-				//Timer0_L = FREQL[k];
-				//Song();
+				if((buf[head] - 'a') >= 0 && (buf[head] - 'a') <= 25) // a-z
+					TempData[rcv_idx] = alphabet[buf[head] - 'a'];
+				else if((buf[head] - '0') >= 0 && (buf[head] - '0') <= 9) // 0-9
+					TempData[rcv_idx] = alphabet[(buf[head] - '0') + 26];
+				else
+					TempData[rcv_idx] = 0;
+
+				rcv_idx += 1;
+				if(rcv_idx >= 8) rcv_idx = 7;
 				head += 1;
 			}
 
-			head = 0; // reset
+			// reset
+			head = rcv_idx = 0;
+
+			// Record
+			was_rec_flag = 1;
+
 		}else{ // ⊿Μ癟碞暗ㄤㄆ
 		
 			ky = KeyScanEight();
+
+			if(ky != 0xff && was_rec_flag){ // button pressed -> clean received message
+				was_rec_flag = 0;
+				TempData[0] = TempData[1] = TempData[2] = TempData[3] = 0;
+				TempData[4] = TempData[5] = TempData[6] = TempData[7] = 0;
+			}
 	
 			if(ky == 8){ // Send UART
 
 				// Add terminator and send
 				inputs[input_idx] = '\0';
 				SendStr(inputs);
-				SendStr("\r\n");
+				SendStr("\r\n"); // not necessary
 	
 				// Clean Input
 				for(input_idx = 0; input_idx < MAX; input_idx++)
 					inputs[input_idx] = 0;
-				input_idx = 0;
 
-				// Clean Demonstrate characters
+				// Reset indexes
+				bfr_idx = input_idx = 0;
+
+				// Clean demonstrate characters
 				TempData[0] = TempData[1] = TempData[2] = TempData[3] = 0;
 				TempData[4] = TempData[5] = TempData[6] = TempData[7] = 0;
 
@@ -130,21 +153,23 @@ void main (void){
 				for(idx = 0; idx < 36; idx++){
 					if(strcmp(bfr, morse[idx]) == 0){
 						TempData[input_idx] = alphabet[idx];
-						if(idx < 26) // A-Z
+						if(idx < 26) // a-z
 							inputs[input_idx] = 'a' + idx;
-						else
+						else // 0-9
 							inputs[input_idx] = '0' + (idx - 26);
 						break;
 					}
 				}
-				input_idx++;
-				if(input_idx >= MAX)input_idx = MAX - 1;
+
+				// Avoid index OutOfBound
+				input_idx = (input_idx >= MAX) ? MAX - 1 : input_idx + 1;
 	
 				// Clean morse code buffer
-				for(bfr_idx = 0; bfr_idx < 6; bfr_idx++) bfr[bfr_idx] = 0;
+				for(bfr_idx = 0; bfr_idx < 6; bfr_idx++)
+					bfr[bfr_idx] = 0;
 				bfr_idx = 0;
 
-			}else if(ky >> 1 == 0){ // ky == 0 or 1
+			}else if(ky >> 1 == 0){ // ky == (0: dot) or (1: dash)
 				
 				if(ky == 0){ // Dot
 					bfr[bfr_idx] = 'd';
@@ -156,7 +181,6 @@ void main (void){
 				bfr_idx = (bfr_idx == 5) ? 5 : bfr_idx + 1;
 
 				// Check dot or dash
-				
 				if(bfr[bfr_idx - 1] == 'd') TempData[7] = alphabet[29];
 				else TempData[7] = alphabet[30];
 
@@ -275,10 +299,6 @@ void Timer1_isr(void) interrupt 3{ // 苯磞龄x
 	TempData[2] = alphabet[26 + (len/10)%10];
 	TempData[3] = alphabet[26 + len%10];
 	*/
-/*	TempData[4] = alphabet[26 + ];
-	TempData[5] = alphabet[26 + ];
-	TempData[6] = alphabet[26 + ];
-	TempData[7] = alphabet[26 + ];	*/
 }
 /*------------------------------------------------
  uS┑ㄧ计Τ块把计 unsigned char t礚
@@ -450,4 +470,44 @@ unsigned char KeyScanEight(void){
 		}
 	}
 	return 0xff;
+}
+
+
+void ShowReceivedSymbol(void){
+	unsigned char times, i, j;
+	i = j = times = 0;
+	
+	// Make sound twice
+	for(i = 0; i < 2; i++){
+		while(j < 200){
+			SPK = !SPK;
+			DelayMs(1);
+			j++;
+		}
+		DelayMs(200);
+		j = 0;
+	}
+
+	for(times = 0; times < 2; times++){
+		
+		// Clean current demonstrate characters
+		TempData[0] = TempData[1] = TempData[2] = TempData[3] = 0;
+		TempData[4] = TempData[5] = TempData[6] = TempData[7] = 0;
+		DelayMs(500);
+
+		TempData[0] = alphabet[17]; // r
+		TempData[1] = alphabet[4];  // e
+		TempData[2] = alphabet[2];  // c
+		TempData[3] = alphabet[4];  // e
+		TempData[4] = alphabet[8];  // i
+		TempData[5] = alphabet[21]; // v
+		TempData[6] = alphabet[4];  // e
+		TempData[7] = alphabet[3];  // d
+		DelayMs(500);		
+	}
+
+	// Clean current demonstrate characters
+	TempData[0] = TempData[1] = TempData[2] = TempData[3] = 0;
+	TempData[4] = TempData[5] = TempData[6] = TempData[7] = 0;
+	DelayMs(500);
 }
