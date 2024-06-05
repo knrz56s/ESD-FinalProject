@@ -1,5 +1,5 @@
 Unsolved :
-	UART 與 Timer1 衝突
+	UART 與 Timer1 衝突 -> 目前捨棄Timer1
 Solved :
 	LED 搶到 Rx, Tx -> 只顯示最後四個燈
 	檔案太大：error C249: ‘DATA‘: SEGMENT TOO LARGE -> 刪減程式碼和縮小變數型態

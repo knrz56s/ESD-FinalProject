@@ -1,5 +1,26 @@
 // 傳輸速率9600	晶振11.0592MHz
 // port 插哪個就選哪個
+
+/*
+接線：
+UART：ESP32-16, 17腳接8051-P3^0, P3^1
+LED：8051 P3^4, P3^5, P3^6, P3^7 接 4 個 LED
+按鈕：8051 P1 接 J26-K1~K8
+聲音：8051 P2^6 接 J42-B1
+七段顯示器：8051 P0接 J3 | P2^2, P2^3 接 J2-B, A
+
+七段顯示器：
+若超過8個字母，會顯示前7個+最後一個，不論輸入或接收的訊息
+
+按鈕規則：
+壓下長短K1輸入摩斯密碼
+輸入完一個字元後壓下K4
+沒壓K4會被跳過、沒有此摩斯密碼的也會被空白取代(a-z0-9)
+換句話說就是要空白就直接按K4
+壓下K8送出
+最後一個字元沒壓下K4會被略過
+*/
+
 //包含標頭檔，一般情況不需要改動，標頭檔包含特殊功能寄存器的定義 
 #include <reg52.h> 
 #include <string.h>                       
@@ -9,12 +30,12 @@
 
 /*P3^0, P3^1 : Rx, Tx*/
 
-sbit LED1=P3^4;
-sbit LED2=P3^5;
-sbit LED3=P3^6;
-sbit LED4=P3^7;
+sbit LED1 = P3^4;
+sbit LED2 = P3^5;
+sbit LED3 = P3^6;
+sbit LED4 = P3^7;
 
-sbit SPK=P2^6;  //定義音樂端輸出接口
+sbit SPK = P2^6;  //定義音樂端輸出接口
 sbit LATCH1 = P2^2;
 sbit LATCH2 = P2^3;
 
@@ -65,10 +86,9 @@ void Init_Timer1(void);
 void DelayUs2x(unsigned char t);
 void DelayMs(unsigned char t);
 void Display(unsigned char FirstBit,unsigned char Num);
-//unsigned char KeyScanSixteen(void);
-//unsigned char KeyPro(void);
 unsigned char KeyScanEight(void);
 void ShowReceivedSymbol(void);
+void alert(void);
 /*------------------------------------------------
                     主函數
 ------------------------------------------------*/
@@ -79,7 +99,7 @@ void main (void){
 	// Initialization
 	InitUART();
 	Init_Timer0();
-	//Init_Timer1();
+	//Init_Timer1(); // 開了會爆炸
 
 	SendStr("System launched. -w-\n");
 
@@ -109,6 +129,10 @@ void main (void){
 				if(rcv_idx >= 8) rcv_idx = 7;
 				head += 1;
 			}
+
+			// If received 'SOS'
+			if(buf[0] == 's' && buf[1] == 'o' && buf[2] == 's')
+				alert();
 
 			// reset
 			head = rcv_idx = 0;
@@ -152,7 +176,7 @@ void main (void){
 				// Morse code to alphabet
 				for(idx = 0; idx < 36; idx++){
 					if(strcmp(bfr, morse[idx]) == 0){
-						TempData[input_idx] = alphabet[idx];
+						TempData[input_idx % 8] = alphabet[idx]; // Looply display
 						if(idx < 26) // a-z
 							inputs[input_idx] = 'a' + idx;
 						else // 0-9
@@ -160,6 +184,10 @@ void main (void){
 						break;
 					}
 				}
+
+				// If not in a-z0-9 or not a normal character -> space replace
+				if(idx == 36)
+					inputs[input_idx] = ' ';
 
 				// Avoid index OutOfBound
 				input_idx = (input_idx >= MAX) ? MAX - 1 : input_idx + 1;
@@ -181,9 +209,7 @@ void main (void){
 				bfr_idx = (bfr_idx == 5) ? 5 : bfr_idx + 1;
 
 				// Check dot or dash
-				if(bfr[bfr_idx - 1] == 'd') TempData[7] = alphabet[29];
-				else TempData[7] = alphabet[30];
-
+				//TempData[7] = (bfr[bfr_idx - 1] == 'd') ? alphabet[32] : alphabet[35];
 			}
 		
 		}
@@ -278,16 +304,7 @@ void Timer0_isr(void) interrupt 1{	// 七段顯示器顯示字形
 
 	Display(0, 8); // 調用數碼管掃描
 }
-void Timer1_isr(void) interrupt 3{ // 掃描按鍵x
-
-	
-/*	TempData[0] = alphabet[3];
-	TempData[1] = alphabet[4];
-	TempData[2] = alphabet[11];
-	TempData[3] = alphabet[19];
-	TempData[4] = alphabet[0];*/
-
-	//unsigned char ky;	
+void Timer1_isr(void) interrupt 3{
 
 	TH1=(65536-2000)/256;		  //重新賦值 2ms
 	TL1=(65536-2000)%256;	
@@ -348,79 +365,6 @@ void Display(unsigned char FirstBit,unsigned char Num){
 	if(i==Num) i=0;
 }
 /*------------------------------------------------
-        按鍵掃瞄函數，返回掃瞄鍵值
-------------------------------------------------*/
-/*unsigned char KeyScanSixteen(void){  //鍵盤掃瞄函數，使用行列逐級掃瞄法
-	unsigned char Val;
-	KeyPort=0xf0;//高四位置高，低四位拉低
-	if(KeyPort!=0xf0){ //表示有按鍵按下
-		DelayMs(10);  //去抖
-		if(KeyPort!=0xf0){ //表示有按鍵按下
-			KeyPort=0xfe; //檢測第一行
-			if(KeyPort!=0xfe){
-				Val=KeyPort&0xf0;
-		  	    Val+=0x0e;
-		  		while(KeyPort!=0xfe);
-				DelayMs(10); //去抖
-				while(KeyPort!=0xfe);
-		     	return Val;
-		    }
-		    KeyPort=0xfd; //檢測第二行
-			if(KeyPort!=0xfd){
-				Val=KeyPort&0xf0;
-	  	    	Val+=0x0d;
-	  			while(KeyPort!=0xfd);
-				DelayMs(10); //去抖
-				while(KeyPort!=0xfd);
-	     		return Val;
-		    }
-			KeyPort=0xfb; //檢測第三行
-			if(KeyPort!=0xfb){
-				Val=KeyPort&0xf0;
-		  	    Val+=0x0b;
-		  		while(KeyPort!=0xfb);
-				DelayMs(10); //去抖
-				while(KeyPort!=0xfb);
-		     	return Val;
-		    }
-			KeyPort=0xf7; //檢測第四行
-			if(KeyPort!=0xf7){
-				Val=KeyPort&0xf0;
-		  	    Val+=0x07;
-		  		while(KeyPort!=0xf7);
-				DelayMs(10); //去抖
-				while(KeyPort!=0xf7);
-		     	return Val;
-		    }
-		}
-	}
-	return 0xff;
-}*/
-/*------------------------------------------------
-         按鍵值處理函數，返回掃鍵值
-------------------------------------------------*/
-/*unsigned char KeyPro(void){
-	switch(KeyScanSixteen()){
-		case 0x7e:return 0;break;//0 按下相應的鍵顯示相對應的碼值
-		case 0x7d:return 1;break;//1
-		case 0x7b:return 2;break;//2
-		case 0x77:return 3;break;//3
-		case 0xbe:return 4;break;//4
-		case 0xbd:return 5;break;//5
-		case 0xbb:return 6;break;//6
-		case 0xb7:return 7;break;//7
-		case 0xde:return 8;break;//8
-		case 0xdd:return 9;break;//9
-		case 0xdb:return 10;break;//a
-		case 0xd7:return 11;break;//b
-		case 0xee:return 12;break;//c
-		case 0xed:return 13;break;//d
-		case 0xeb:return 14;break;//e
-		case 0xe7:return 15;break;//f
-		default:return 0xff;break;
-	}
-}*/
-/*------------------------------------------------
 按鍵掃描函數，返回掃描鍵值
 ------------------------------------------------*/
 unsigned char KeyScanEight(void){
@@ -431,7 +375,7 @@ unsigned char KeyScanEight(void){
 		if(KeyPort!=0xff){
 			keyvalue = KeyPort;
 
-			LED1 = LED2 = LED3 = LED4 = 0;
+			LED1 = LED2 = LED3 = LED4 = 0; // 亮光
 		    while(KeyPort != 0xff){ // 壓住發出聲音
 				SPK = !SPK;
 				DelayMs(1);
@@ -440,33 +384,11 @@ unsigned char KeyScanEight(void){
 				if(len > 10000)len = 9999;
 
 			}			
-			LED1 = LED2 = LED3 = LED4 = 1;
+			LED1 = LED2 = LED3 = LED4 = 1; // 熄滅
 
-			if(keyvalue == 0x7f) return 8;
-			if(keyvalue == 0xf7) return 4;
+			if(keyvalue == 0x7f) return 8; // 按下 K8
+			if(keyvalue == 0xf7) return 4; // 按下 K4
 			return (len > 300) ? 1 : 0; // 測試後感覺較好
-
-
-			/*switch(keyvalue){
-				case 0xfe:
-					return 1;break;
-				case 0xfd:
-					return 2;break;
-				case 0xfb:
-					return 3;break;
-				case 0xf7:
-					return 4;break;
-				case 0xef:
-					return 5;break;
-				case 0xdf:
-					return 6;break;
-				case 0xbf:
-					return 7;break;
-				case 0x7f:
-					return 8;break;
-				default:
-					return 0;break;
-			}*/
 		}
 	}
 	return 0xff;
@@ -510,4 +432,26 @@ void ShowReceivedSymbol(void){
 	TempData[0] = TempData[1] = TempData[2] = TempData[3] = 0;
 	TempData[4] = TempData[5] = TempData[6] = TempData[7] = 0;
 	DelayMs(500);
+}
+
+void alert(void){
+	unsigned char k, i, j;
+	i = j = k = 0;
+	
+	// Make sound three times * 3
+	for(i = 0; i < 3; i++){
+		LED1 = LED2 = LED3 = LED4 = 0;
+		for(k = 0; k < 3; k++){
+			while(j < 200){
+				SPK = !SPK;
+				DelayMs(1);
+				j++;
+			}
+			DelayMs(25);
+			j = 0;
+		}
+		LED1 = LED2 = LED3 = LED4 = 1;
+		j = 0;
+		DelayMs(400);
+	}
 }
